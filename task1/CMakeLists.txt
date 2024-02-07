@@ -1,0 +1,1 @@
+add_executable(task task_float.cpp)
