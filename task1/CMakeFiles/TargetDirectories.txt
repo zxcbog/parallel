@@ -1,3 +1,4 @@
-/home/m.unzhakov/parallel/task1/CMakeFiles/task.dir
+/home/m.unzhakov/parallel/task1/CMakeFiles/float.dir
+/home/m.unzhakov/parallel/task1/CMakeFiles/double.dir
 /home/m.unzhakov/parallel/task1/CMakeFiles/edit_cache.dir
 /home/m.unzhakov/parallel/task1/CMakeFiles/rebuild_cache.dir

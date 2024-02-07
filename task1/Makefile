@@ -117,24 +117,61 @@ depend:
 .PHONY : depend
 
 #=============================================================================
-# Target rules for targets named task
+# Target rules for targets named float
 
 # Build rule for target.
-task: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 task
-.PHONY : task
+float: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 float
+.PHONY : float
 
 # fast build rule for target.
-task/fast:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/task.dir/build.make CMakeFiles/task.dir/build
-.PHONY : task/fast
+float/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/float.dir/build.make CMakeFiles/float.dir/build
+.PHONY : float/fast
+
+#=============================================================================
+# Target rules for targets named double
+
+# Build rule for target.
+double: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 double
+.PHONY : double
+
+# fast build rule for target.
+double/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/double.dir/build.make CMakeFiles/double.dir/build
+.PHONY : double/fast
+
+task_double.o: task_double.cpp.o
+.PHONY : task_double.o
+
+# target to build an object file
+task_double.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/double.dir/build.make CMakeFiles/double.dir/task_double.cpp.o
+.PHONY : task_double.cpp.o
+
+task_double.i: task_double.cpp.i
+.PHONY : task_double.i
+
+# target to preprocess a source file
+task_double.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/double.dir/build.make CMakeFiles/double.dir/task_double.cpp.i
+.PHONY : task_double.cpp.i
+
+task_double.s: task_double.cpp.s
+.PHONY : task_double.s
+
+# target to generate assembly for a file
+task_double.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/double.dir/build.make CMakeFiles/double.dir/task_double.cpp.s
+.PHONY : task_double.cpp.s
 
 task_float.o: task_float.cpp.o
 .PHONY : task_float.o
 
 # target to build an object file
 task_float.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/task.dir/build.make CMakeFiles/task.dir/task_float.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/float.dir/build.make CMakeFiles/float.dir/task_float.cpp.o
 .PHONY : task_float.cpp.o
 
 task_float.i: task_float.cpp.i
@@ -142,7 +179,7 @@ task_float.i: task_float.cpp.i
 
 # target to preprocess a source file
 task_float.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/task.dir/build.make CMakeFiles/task.dir/task_float.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/float.dir/build.make CMakeFiles/float.dir/task_float.cpp.i
 .PHONY : task_float.cpp.i
 
 task_float.s: task_float.cpp.s
@@ -150,7 +187,7 @@ task_float.s: task_float.cpp.s
 
 # target to generate assembly for a file
 task_float.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/task.dir/build.make CMakeFiles/task.dir/task_float.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/float.dir/build.make CMakeFiles/float.dir/task_float.cpp.s
 .PHONY : task_float.cpp.s
 
 # Help Target
@@ -161,7 +198,11 @@ help:
 	@echo "... depend"
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
-	@echo "... task"
+	@echo "... double"
+	@echo "... float"
+	@echo "... task_double.o"
+	@echo "... task_double.i"
+	@echo "... task_double.s"
 	@echo "... task_float.o"
 	@echo "... task_float.i"
 	@echo "... task_float.s"
