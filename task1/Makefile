@@ -1,5 +1,3 @@
-all: double
-
 float:
 	g++ task_float.cpp -o task
 
