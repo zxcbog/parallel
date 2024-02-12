@@ -1,0 +1,1 @@
+To compile write command "make" in current directory. To start programm use ./task "M size of matrix" "N size of matrix" "Number of threads"
