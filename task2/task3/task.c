@@ -27,7 +27,7 @@ int msleep(long msec)
 }
 
 double epsilon = 0.00001;
-double iteration_step = 0.0001;
+double iteration_step = 0.00001;
 
 double cpuSecond()
 {
@@ -63,7 +63,30 @@ double vector_length(double* vec, int n) {
     return sqrt(vec_length_sum);
 }
 
-void simple_iteration_method_first_realization(double* A, double* x, double* b, int n) {
+void simple_iteration_method_first_realization_serial(double* A, double* x, double* b, int n) {
+    double* xn = (double*)malloc(sizeof(double) * n);
+    double* x_offset = (double*)malloc(sizeof(double) * n);
+    double convergence_coeff = 1;
+    
+    double b_length = vector_length(b, n);
+    double t = cpuSecond();
+    while (convergence_coeff > epsilon) {
+        serial_dot(A, x, xn, n, n);
+        double x_offset_length = 0;
+        for (int i = 0; i < n; i++) {
+            x_offset[i] = (xn[i] - b[i]);
+            x[i] = x[i] - iteration_step * x_offset[i];
+            x_offset_length += x_offset[i] * x_offset[i];
+        }
+        convergence_coeff = sqrt(x_offset_length) / b_length;
+    }
+    t = cpuSecond() - t;
+    printf("%.12f\n", t);
+    free(xn);
+    free(x_offset);
+}
+
+void simple_iteration_method_first_realization_parallel(double* A, double* x, double* b, int n) {
     double* xn = (double*)malloc(sizeof(double) * n);
     double* x_offset = (double*)malloc(sizeof(double) * n);
     double convergence_coeff = 1;
@@ -110,7 +133,6 @@ void simple_iteration_method_second_realization(double* A, double* x, double* b,
         }
         for (int i = 0; i < n; i++) 
             x[i] = x[i] - minimize_vector[i];
-        
         convergence_coeff = sqrt(x_offset_length) / b_length;
         
     }
@@ -121,7 +143,7 @@ void simple_iteration_method_second_realization(double* A, double* x, double* b,
 }
 
 int main() {
-    int n = 10000;
+    int n = 6000;
     double* A = (double*)malloc(sizeof(double) * n * n);
     double* b = (double*)malloc(sizeof(double) * n);
     double* x = (double*)malloc(sizeof(double) * n);
@@ -144,10 +166,17 @@ int main() {
     //     }
     //     printf("= %lf\n", b[i]);
     // }
-    simple_iteration_method_first_realization(A, x, b, n);
+    //printf("first realization serial time:\n");
+    //simple_iteration_method_first_realization_serial(A, x, b, n);
+    // for (int i = 0; i < n; i++) {
+    //     x[i] = 0;
+    // }
+    printf("first realization parallel time:\n");
+    simple_iteration_method_first_realization_parallel(A, x, b, n);
     for (int i = 0; i < n; i++) {
         x[i] = 0;
     }
+    printf("second realization parallel time:\n");
     simple_iteration_method_second_realization(A, x, b, n);
     
     //for (int i = 0; i < n; i++)
