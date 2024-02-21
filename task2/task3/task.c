@@ -2,29 +2,7 @@
 #include <omp.h>
 #include <math.h>
 #include <time.h>
-#include <errno.h>
 #include <stdlib.h>
-
-int msleep(long msec)
-{
-    struct timespec ts;
-    int res;
-
-    if (msec < 0)
-    {
-        errno = EINVAL;
-        return -1;
-    }
-
-    ts.tv_sec = msec / 1000;
-    ts.tv_nsec = (msec % 1000) * 1000000;
-
-    do {
-        res = nanosleep(&ts, &ts);
-    } while (res && errno == EINTR);
-
-    return res;
-}
 
 double epsilon = 0.00001;
 double iteration_step = 0.00001;
@@ -67,7 +45,6 @@ void simple_iteration_method_first_realization_serial(double* A, double* x, doub
     double* xn = (double*)malloc(sizeof(double) * n);
     double* x_offset = (double*)malloc(sizeof(double) * n);
     double convergence_coeff = 1;
-    
     double b_length = vector_length(b, n);
     double t = cpuSecond();
     while (convergence_coeff > epsilon) {
@@ -90,7 +67,7 @@ void simple_iteration_method_first_realization_parallel(double* A, double* x, do
     double* xn = (double*)malloc(sizeof(double) * n);
     double* x_offset = (double*)malloc(sizeof(double) * n);
     double convergence_coeff = 1;
-    
+    int iteration_count = 0;
     double b_length = vector_length(b, n);
     double t = cpuSecond();
     while (convergence_coeff > epsilon) {
@@ -110,36 +87,45 @@ void simple_iteration_method_first_realization_parallel(double* A, double* x, do
 }
 
 void simple_iteration_method_second_realization(double* A, double* x, double* b, int n) {
-    double* xn = (double*)malloc(sizeof(double) * n);
-    double* x_offset = (double*)malloc(sizeof(double) * n);
-    double* minimize_vector = (double*)malloc(sizeof(double) * n);
+    double* xn = (double*)malloc(sizeof(double) * n); // Ax
+    double* x_offset = (double*)malloc(sizeof(double) * n); // Ax - b
+    double* minimize_vector = (double*)malloc(sizeof(double) * n); // (Ax - b) * tau
+    double x_offset_length = 0;
     double convergence_coeff = 1;
     double b_length = vector_length(b, n);
+    int iteration_count = 0;
     double t = cpuSecond();
+    #pragma omp parallel
+    {
     while (convergence_coeff > epsilon) {
-        //parallel_dot(A, x, xn, n, n);
-        double x_offset_length = 0;
-        #pragma omp parallel
-        {
-        #pragma omp for
+        #pragma omp master
+        x_offset_length = 0;
+        #pragma omp for schedule(guided, 40)
         for (int i = 0; i < n; i++) {
             xn[i] = 0;
             for (int j = 0; j < n; j++)
                 xn[i] += A[i * n + j] * x[j];
             x_offset[i] = (xn[i] - b[i]);
             minimize_vector[i] = iteration_step * x_offset[i];
+            #pragma omp atomic
             x_offset_length += x_offset[i] * x_offset[i];
+            
         }
-        }
-        for (int i = 0; i < n; i++) 
+        #pragma omp barrier
+
+        #pragma omp master 
+        {
+        for (int i = 0; i < n ; i++)
             x[i] = x[i] - minimize_vector[i];
         convergence_coeff = sqrt(x_offset_length) / b_length;
-        
+        }
+    }
     }
     t = cpuSecond() - t;
     printf("%.12f\n", t);
     free(xn);
     free(x_offset);
+    free(minimize_vector);
 }
 
 int main() {
@@ -166,8 +152,8 @@ int main() {
     //     }
     //     printf("= %lf\n", b[i]);
     // }
-    //printf("first realization serial time:\n");
-    //simple_iteration_method_first_realization_serial(A, x, b, n);
+    // printf("first realization serial time:\n");
+    // simple_iteration_method_first_realization_serial(A, x, b, n);
     // for (int i = 0; i < n; i++) {
     //     x[i] = 0;
     // }
@@ -178,9 +164,5 @@ int main() {
     }
     printf("second realization parallel time:\n");
     simple_iteration_method_second_realization(A, x, b, n);
-    
-    //for (int i = 0; i < n; i++)
-    //    printf("x%d = %lf\n", i + 1, x[i]);
-    
     return 0;
 }
