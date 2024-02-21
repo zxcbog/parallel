@@ -40,15 +40,11 @@ double integrate_omp(double (*func)(double), double a, double b, int n)
     double h = (b - a) / n;
     double sum = 0.0;
 
-#pragma omp parallel num_threads(thread_limit)
+    #pragma omp parallel
     {
-        int nthreads = omp_get_num_threads();
-        int threadid = omp_get_thread_num();
-        int items_per_thread = n / nthreads;
-        int lb = threadid * items_per_thread;
-        int ub = (threadid == nthreads - 1) ? (n - 1) : (lb + items_per_thread - 1);
         double local_sum = 0.0;
-        for (int i = lb; i <= ub; i++)
+        #pragma omp for
+        for (int i = 0; i < n; i++)
             local_sum += func(a + h * (i + 0.5));
         #pragma omp atomic
         sum += local_sum;
