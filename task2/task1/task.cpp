@@ -19,12 +19,8 @@ void matrix_vector_product_omp(std::vector<double>& a, std::vector<double>& b, s
 {
     #pragma omp parallel num_threads(thread_number)
     {
-        int nthreads = omp_get_num_threads(); // number of threads
-        int threadid = omp_get_thread_num(); // current thread id
-        int items_per_thread = c.size() / nthreads; // number of lines that can be given to one thread
-        int lb = threadid * items_per_thread; // the first line of current thread
-        int ub = (threadid == nthreads - 1) ? (c.size() - 1) : (lb + items_per_thread - 1); // the last line of the current thread
-        for (int i = lb; i <= ub; i++) {
+        #pragma omp for
+        for (int i = 0; i < c.size(); i++) {
             c[i] = 0.0;
             for (int j = 0; j < b.size(); j++)
                 c[i] += a[i * b.size() + j] * b[j];
@@ -40,12 +36,8 @@ double run_tests(int m, int n, void (*func)(std::vector<double>&, std::vector<do
     c = std::vector<double>(m); // out vector of m size
     #pragma omp parallel num_threads(40)
     {
-        int nthreads = omp_get_num_threads(); // number of threads
-        int threadid = omp_get_thread_num(); // current thread id
-        int items_per_thread = c.size() / nthreads; // number of lines that can be given to one thread
-        int lb = threadid * items_per_thread; // the first line of current thread
-        int ub = (threadid == nthreads - 1) ? (c.size() - 1) : (lb + items_per_thread - 1); // the last line of the current thread
-        for (int i = lb; i < ub; i++) {
+        #pragma omp for
+        for (int i = 0; i < c.size(); i++) {
             for (int j = 0; j < b.size(); j++)
                 a[i * b.size() + j] = i + j;
         }
