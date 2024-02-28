@@ -7,6 +7,8 @@
 double epsilon = 0.00001;
 double iteration_step = 0.00001;
 
+int threads_number = 0;
+
 double cpuSecond()
 {
     struct timespec ts;
@@ -15,7 +17,7 @@ double cpuSecond()
 }
 
 void parallel_dot(double* A, double* b, double* c, int n, int m) {
-    #pragma omp parallel
+    #pragma omp parallel num_threads(threads_number)
     {
     #pragma omp for
     for (int i = 0; i < n; i++) {
@@ -93,12 +95,12 @@ void simple_iteration_method_second_realization(double* A, double* x, double* b,
     double x_offset_length = 0;
     double convergence_coeff = 1;
     double b_length = vector_length(b, n);
-    int iteration_count = 0;
+    char stop = 0;
     double t = cpuSecond();
-    #pragma omp parallel
+    #pragma omp parallel num_threads(threads_number) shared(stop)
     {
-    while (convergence_coeff > epsilon) {
-        #pragma omp master
+    while ((convergence_coeff > epsilon) && !stop) {
+        #pragma omp single
         x_offset_length = 0;
         #pragma omp for schedule(guided, 40)
         for (int i = 0; i < n; i++) {
@@ -113,13 +115,13 @@ void simple_iteration_method_second_realization(double* A, double* x, double* b,
         }
         #pragma omp barrier
 
-        #pragma omp master 
-        {
+        #pragma omp for 
         for (int i = 0; i < n ; i++)
             x[i] = x[i] - minimize_vector[i];
+        #pragma omp single
         convergence_coeff = sqrt(x_offset_length) / b_length;
-        }
     }
+    stop = 1;
     }
     t = cpuSecond() - t;
     printf("%.12f\n", t);
@@ -129,7 +131,7 @@ void simple_iteration_method_second_realization(double* A, double* x, double* b,
 }
 
 int main() {
-    int n = 6000;
+    int n = 10000;
     double* A = (double*)malloc(sizeof(double) * n * n);
     double* b = (double*)malloc(sizeof(double) * n);
     double* x = (double*)malloc(sizeof(double) * n);
@@ -144,25 +146,24 @@ int main() {
     for (int i = 0; i < n; i++)
         b[i] = n + 1;
     
-    // for (int i = 0; i < n; i++) {
-    //     for (int j = 0; j < n; j++) {
-    //         printf("%lfx%d ", A[i*n+j], j + 1);
-    //         if (j != n - 1)
-    //             printf("+ ");
-    //     }
-    //     printf("= %lf\n", b[i]);
-    // }
-    // printf("first realization serial time:\n");
-    // simple_iteration_method_first_realization_serial(A, x, b, n);
-    // for (int i = 0; i < n; i++) {
-    //     x[i] = 0;
-    // }
-    printf("first realization parallel time:\n");
-    simple_iteration_method_first_realization_parallel(A, x, b, n);
+    threads_number = 10;
+    printf("first realization serial time:\n");
+    simple_iteration_method_first_realization_serial(A, x, b, n);
     for (int i = 0; i < n; i++) {
         x[i] = 0;
     }
-    printf("second realization parallel time:\n");
-    simple_iteration_method_second_realization(A, x, b, n);
+    int constant_num_threads_size = 7;
+    int constant_num_threads[] = { 1, 2, 4, 8, 16, 20, 40 };
+    for (int j = 0; j < constant_num_threads_size; j++) {
+        threads_number = constant_num_threads[j];
+        printf("thread_number = %d\n", threads_number);
+        printf("first realization parallel time:\n");
+        simple_iteration_method_first_realization_parallel(A, x, b, n);
+        for (int i = 0; i < n; i++) {
+            x[i] = 0;
+        }
+        printf("second realization parallel time:\n");
+        simple_iteration_method_second_realization(A, x, b, n);
+    }
     return 0;
 }
