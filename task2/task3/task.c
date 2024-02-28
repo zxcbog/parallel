@@ -131,7 +131,7 @@ void simple_iteration_method_second_realization(double* A, double* x, double* b,
 }
 
 int main() {
-    int n = 10000;
+    int n = 7000;
     double* A = (double*)malloc(sizeof(double) * n * n);
     double* b = (double*)malloc(sizeof(double) * n);
     double* x = (double*)malloc(sizeof(double) * n);
@@ -157,6 +157,9 @@ int main() {
     for (int j = 0; j < constant_num_threads_size; j++) {
         threads_number = constant_num_threads[j];
         printf("thread_number = %d\n", threads_number);
+        for (int i = 0; i < n; i++) {
+            x[i] = 0;
+        }
         printf("first realization parallel time:\n");
         simple_iteration_method_first_realization_parallel(A, x, b, n);
         for (int i = 0; i < n; i++) {
