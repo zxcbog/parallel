@@ -2,6 +2,7 @@
 #include <unordered_map>
 #include <cmath>
 #include <thread>
+#include <condition_variable>
 #include <chrono>
 #include <mutex>
 #include <future>
@@ -93,38 +94,47 @@ private:
         Task<T>* task;
         size_t id;
     };
+    std::condition_variable server_check;
+    size_t num_of_workers = 1;
     safe_que<task_with_id> task_que;
     safe_que<size_t> free_ids;
     size_t max_id = 0;
     std::unordered_map<size_t, T> task_result;
     std::thread event_thread;
     bool running = false;
+    std::mutex server_lock;
+    std::mutex cv_server_lock;
     void event_loop() {
         while (running) {
-            if (task_que.empty()) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                continue;
+            std::unique_lock<std::mutex> locker(cv_server_lock);
+            while (task_que.empty()) {
+                server_check.wait(locker);
+                break;
             }
+            if (task_que.empty()) break;
             task_with_id task_struct = task_que.pop();
             T return_value = task_struct.task->do_task();
+            server_lock.lock();
             task_result.insert(std::make_pair(task_struct.id, return_value));
+            server_lock.unlock();
         }
     }
     size_t get_free_id() {
-        thread_lock.lock();
+        server_lock.lock();
         if (free_ids.empty()) {
             free_ids.push(max_id++);
         }
         size_t free_id = free_ids.pop();
-        thread_lock.unlock();
+        server_lock.unlock();
         return free_id;
     }
 public:
     ~Server() {
         this->stop();
+        server_check.notify_one();
         event_thread.join();
     }
-    void start() {
+    void start(size_t num_of_workers = 0) {
         running = true;
         event_thread = std::thread(&Server::event_loop, this);
     }
@@ -135,6 +145,7 @@ public:
         size_t free_id = get_free_id();
         task_with_id task_to_add = { task, free_id };
         task_que.push(std::move(task_to_add));
+        server_check.notify_one();
         return task_to_add.id;
     }
     T request_result(size_t id) {
@@ -142,10 +153,10 @@ public:
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
         T result = task_result.at(id);
-        thread_lock.lock();
+        server_lock.lock();
         task_result.erase(id);
         free_ids.push(id);
-        thread_lock.unlock();
+        server_lock.unlock();
         return result;
     }
 };
@@ -167,18 +178,19 @@ void give_task_to_server(Server<T>* server, Task<T>* task, int num_of_tasks) {
 int main() {
     Server<float> server;
     server.start();
-    std::vector<Task<float>*> tasks = { new PowTask<float>(5.0f, 2.0f), 
-                                        new SinTask<float>(3.14 / 6),
-                                        new SqrtTask<float>(25)
-                                      };
-    std::vector<std::thread> threads_l;
-    for (Task<float>* task : tasks) {
-        std::thread th(give_task_to_server<float>, &server, task, 10000);
-        threads_l.push_back(std::move(th));
-    }
-    for (auto& thread : threads_l) {
-        thread.join();
-    }
+
+     std::vector<Task<float>*> tasks = { new PowTask<float>(5.0f, 2.0f), 
+                                         new SinTask<float>(3.14 / 6),
+                                         new SqrtTask<float>(25)
+                                       };
+     std::vector<std::thread> threads_l;
+     for (Task<float>* task : tasks) {
+         std::thread th(give_task_to_server<float>, &server, task, 10000);
+         threads_l.push_back(std::move(th));
+     }
+     for (auto& thread : threads_l) {
+         thread.join();
+     }
     server.stop();
     return 0;
 }
