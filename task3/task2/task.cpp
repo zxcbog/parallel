@@ -97,6 +97,7 @@ public:
         std::cout << task_name;
     }
     T do_task() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
         return std::pow(this->arg1, this->arg2);
     }
 };
@@ -109,6 +110,7 @@ private:
         size_t id;
     };
     std::condition_variable server_check;
+    std::condition_variable client_check;
     size_t num_of_workers = 1;
     safe_que<task_with_id> task_que;
     safe_que<size_t> free_ids;
@@ -118,21 +120,21 @@ private:
     bool running = false;
     bool stopped = true;
     std::mutex server_lock;
+    std::mutex cv_client_lock;
+    std::mutex cv_server_lock;
     void event_loop() {
-        std::mutex thread_mutex;
         while (running) {
             // locker to lock eventloop until the task is arrived
-            std::unique_lock<std::mutex> locker(thread_mutex);
-
+            std::unique_lock<std::mutex> locker(cv_server_lock);
             while (task_que.empty()) {
                 //std::cout << std::this_thread::get_id() << " thread have no tasks\n";
                 // cv may work falsely, for this reason using while loop where we check that the task queue isn't empty
                 server_check.wait(locker);
-                
                 //std::cout << std::this_thread::get_id() << " got the task signal\n";
                 if (!running)
                     return;
             }
+            locker.unlock();
             task_with_id task_struct;
             task_struct.id = -1;
             server_lock.lock();
@@ -141,9 +143,10 @@ private:
             server_lock.unlock();
             if (task_struct.id != -1) {
                 T return_value = task_struct.task->do_task();
-                server_lock.lock();
+                cv_client_lock.lock();
                 task_result.insert(std::make_pair(task_struct.id, return_value));
-                server_lock.unlock();
+                client_check.notify_all();
+                cv_client_lock.unlock();
             }
         }
     }
@@ -173,7 +176,9 @@ public:
     void stop() {
         running = false;
         stopped = true;
+        cv_server_lock.lock();
         server_check.notify_all();
+        cv_server_lock.unlock();
         for (std::thread& event_thread : this->event_thread_pool) {
             event_thread.join();
         }
@@ -183,13 +188,18 @@ public:
         task_with_id task_to_add = { task, free_id };
         server_lock.lock();
         task_que.push(std::move(task_to_add));
-        server_check.notify_one();
         server_lock.unlock();
+        std::unique_lock<std::mutex> lk(cv_server_lock);
+        lk.unlock();
+        server_check.notify_one();
+        lk.lock();
         return task_to_add.id;
     }
     T request_result(size_t id) {
+        std::unique_lock<std::mutex> locker(cv_client_lock);
         while (task_result.find(id) == task_result.end()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            //std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            client_check.wait(locker);
         }
         T result = task_result.at(id);
         server_lock.lock();
@@ -216,7 +226,7 @@ void give_task_to_server(Server<T>* server, Task<T>* task, int num_of_tasks) {
 
 int main() {
     Server<float> server;
-    server.start(4);
+    server.start(16);
     std::vector<Task<float>*> tasks = { new PowTask<float>(5.0f, 2.0f),
                                         new SinTask<float>(3.14 / 6),
                                         new SqrtTask<float>(25)
@@ -224,7 +234,7 @@ int main() {
     std::vector<std::thread> threads_l;
     const auto start{ std::chrono::steady_clock::now() };
     for (Task<float>* task : tasks) {
-        std::thread th(give_task_to_server<float>, &server, task, 1000000);
+        std::thread th(give_task_to_server<float>, &server, task, 1000);
         threads_l.push_back(std::move(th));
     }
     for (auto& thread : threads_l) {
