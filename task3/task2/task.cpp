@@ -97,7 +97,10 @@ public:
         std::cout << task_name;
     }
     T do_task() {
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        int asd= 0;
+        for (int i = 0; i < 100000; i++) {
+            asd = i;
+        }
         return std::pow(this->arg1, this->arg2);
     }
 };
@@ -121,11 +124,10 @@ private:
     bool stopped = true;
     std::mutex server_lock;
     std::mutex cv_client_lock;
-    std::mutex cv_server_lock;
     void event_loop() {
         while (running) {
             // locker to lock eventloop until the task is arrived
-            std::unique_lock<std::mutex> locker(cv_server_lock);
+            std::unique_lock<std::mutex> locker(server_lock);
             while (task_que.empty()) {
                 //std::cout << std::this_thread::get_id() << " thread have no tasks\n";
                 // cv may work falsely, for this reason using while loop where we check that the task queue isn't empty
@@ -176,9 +178,7 @@ public:
     void stop() {
         running = false;
         stopped = true;
-        cv_server_lock.lock();
         server_check.notify_all();
-        cv_server_lock.unlock();
         for (std::thread& event_thread : this->event_thread_pool) {
             event_thread.join();
         }
@@ -188,17 +188,13 @@ public:
         task_with_id task_to_add = { task, free_id };
         server_lock.lock();
         task_que.push(std::move(task_to_add));
-        server_lock.unlock();
-        std::unique_lock<std::mutex> lk(cv_server_lock);
-        lk.unlock();
         server_check.notify_one();
-        lk.lock();
+        server_lock.unlock();
         return task_to_add.id;
     }
     T request_result(size_t id) {
         std::unique_lock<std::mutex> locker(cv_client_lock);
         while (task_result.find(id) == task_result.end()) {
-            //std::this_thread::sleep_for(std::chrono::milliseconds(100));
             client_check.wait(locker);
         }
         T result = task_result.at(id);
@@ -226,7 +222,7 @@ void give_task_to_server(Server<T>* server, Task<T>* task, int num_of_tasks) {
 
 int main() {
     Server<float> server;
-    server.start(16);
+    server.start(10);
     std::vector<Task<float>*> tasks = { new PowTask<float>(5.0f, 2.0f),
                                         new SinTask<float>(3.14 / 6),
                                         new SqrtTask<float>(25)
@@ -234,7 +230,7 @@ int main() {
     std::vector<std::thread> threads_l;
     const auto start{ std::chrono::steady_clock::now() };
     for (Task<float>* task : tasks) {
-        std::thread th(give_task_to_server<float>, &server, task, 1000);
+        std::thread th(give_task_to_server<float>, &server, task, 100000);
         threads_l.push_back(std::move(th));
     }
     for (auto& thread : threads_l) {
