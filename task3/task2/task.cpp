@@ -10,11 +10,25 @@
 
 std::mutex thread_lock;
 
+
 template <typename T>
 class safe_que {
     std::queue<T> que;
     std::mutex que_lock;
 public:
+    class safe_que_return_node {
+        T* value = 0;
+    public:
+        void set_value(T val) {
+            this->value = new T(val);
+        }
+        T* get_value() {
+            return this->value;
+        }
+        ~safe_que_return_node() {
+            delete value;
+        }
+    };
     void push(T val) {
         que_lock.lock();
         que.push(val);
@@ -100,25 +114,40 @@ private:
     safe_que<size_t> free_ids;
     size_t max_id = 0;
     std::unordered_map<size_t, T> task_result;
-    std::thread event_thread;
+    std::vector<std::thread> event_thread_pool;
     bool running = false;
+    bool stopped = true;
     std::mutex server_lock;
-    std::mutex cv_server_lock;
     void event_loop() {
+        std::mutex thread_mutex;
         while (running) {
-            std::unique_lock<std::mutex> locker(cv_server_lock);
+            // locker to lock eventloop until the task is arrived
+            std::unique_lock<std::mutex> locker(thread_mutex);
+
             while (task_que.empty()) {
+                //std::cout << std::this_thread::get_id() << " thread have no tasks\n";
+                // cv may work falsely, for this reason using while loop where we check that the task queue isn't empty
                 server_check.wait(locker);
-                break;
+                
+                //std::cout << std::this_thread::get_id() << " got the task signal\n";
+                if (!running)
+                    return;
             }
-            if (task_que.empty()) break;
-            task_with_id task_struct = task_que.pop();
-            T return_value = task_struct.task->do_task();
+            task_with_id task_struct;
+            task_struct.id = -1;
             server_lock.lock();
-            task_result.insert(std::make_pair(task_struct.id, return_value));
+            if (!task_que.empty())
+                task_struct = task_que.pop();
             server_lock.unlock();
+            if (task_struct.id != -1) {
+                T return_value = task_struct.task->do_task();
+                server_lock.lock();
+                task_result.insert(std::make_pair(task_struct.id, return_value));
+                server_lock.unlock();
+            }
         }
     }
+    // give id to task. server give free id from queue or generate new id otherwise
     size_t get_free_id() {
         server_lock.lock();
         if (free_ids.empty()) {
@@ -130,22 +159,32 @@ private:
     }
 public:
     ~Server() {
-        this->stop();
-        server_check.notify_one();
-        event_thread.join();
+        if (!stopped) {
+            this->stop();
+        }
     }
-    void start(size_t num_of_workers = 0) {
+    void start(size_t num_of_workers = 1) {
         running = true;
-        event_thread = std::thread(&Server::event_loop, this);
+        stopped = false;
+        for (int i = 0; i < num_of_workers; i++) {
+            event_thread_pool.push_back(std::thread(&Server::event_loop, this));
+        }
     }
     void stop() {
         running = false;
+        stopped = true;
+        server_check.notify_all();
+        for (std::thread& event_thread : this->event_thread_pool) {
+            event_thread.join();
+        }
     }
     size_t add_task(Task<T>* task) {
         size_t free_id = get_free_id();
         task_with_id task_to_add = { task, free_id };
+        server_lock.lock();
         task_que.push(std::move(task_to_add));
         server_check.notify_one();
+        server_lock.unlock();
         return task_to_add.id;
     }
     T request_result(size_t id) {
@@ -169,28 +208,31 @@ void give_task_to_server(Server<T>* server, Task<T>* task, int num_of_tasks) {
     }
     for (auto task_id : task_ids) {
         T result = server->request_result(task_id);
-        thread_lock.lock();
+        //thread_lock.lock();
         //std::cout << result << " " << task_id << "\n";
-        thread_lock.unlock();
+        //thread_lock.unlock();
     }
 }
 
 int main() {
     Server<float> server;
-    server.start();
-
-     std::vector<Task<float>*> tasks = { new PowTask<float>(5.0f, 2.0f), 
-                                         new SinTask<float>(3.14 / 6),
-                                         new SqrtTask<float>(25)
-                                       };
-     std::vector<std::thread> threads_l;
-     for (Task<float>* task : tasks) {
-         std::thread th(give_task_to_server<float>, &server, task, 10000);
-         threads_l.push_back(std::move(th));
-     }
-     for (auto& thread : threads_l) {
-         thread.join();
-     }
+    server.start(4);
+    std::vector<Task<float>*> tasks = { new PowTask<float>(5.0f, 2.0f),
+                                        new SinTask<float>(3.14 / 6),
+                                        new SqrtTask<float>(25)
+    };
+    std::vector<std::thread> threads_l;
+    const auto start{ std::chrono::steady_clock::now() };
+    for (Task<float>* task : tasks) {
+        std::thread th(give_task_to_server<float>, &server, task, 1000000);
+        threads_l.push_back(std::move(th));
+    }
+    for (auto& thread : threads_l) {
+        thread.join();
+    }
     server.stop();
+    const auto end{ std::chrono::steady_clock::now() };
+    const std::chrono::duration<double> elapsed_seconds{ end - start };
+    std::cout << elapsed_seconds.count() << "\n";
     return 0;
 }
