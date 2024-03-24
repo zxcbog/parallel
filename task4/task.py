@@ -49,7 +49,7 @@ class SensorX(Sensor):
 
 
 class SensorCam(Sensor):
-    def __init__(self, cam_name: int, video_resolution : (int, int)):
+    def __init__(self, cam_name: int, video_resolution : tuple[int, int]):
         self._cam_name = cam_name
         self._video_resolution = video_resolution
         self._video_io = cv2.VideoCapture(self._cam_name)
